@@ -1,6 +1,9 @@
-from chimere.types import JSONData, PythonDictData, PandasDataFrameData, CSVData, XMLData
+from chimere.types import JSONData, PythonDictData, PandasDataFrameData, CSVData, XMLData, ParquetData, ERRORData
 from chimere.core import convert
 import pytest
+import pandas as pd
+
+# ---- Tests de base ----
 
 def test_json_to_dict():
     json_obj = JSONData('{"name": "Alice", "age": 30}')
@@ -13,7 +16,9 @@ def test_no_adapter_found():
     from chimere.types import CSVData
     json_obj = JSONData('{"key": "value"}')
     with pytest.raises(ValueError):
-        convert(json_obj, XMLData)
+        convert(json_obj, ERRORData)
+
+# ---- Tests ajoutés pour Phase 2 ---- 
 
 def test_chain_conversion_json_to_csv():
     # Chemin: JSONData -> PythonDictData -> PandasDataFrameData -> CSVData
@@ -27,10 +32,46 @@ def test_chain_conversion_json_to_csv():
     assert "25" in csv_obj.content
 
 def test_no_direct_or_indirect_path():
-    # On va demander une conversion impossible, par ex: JSONData -> PandasDataFrameData directement
-    # Sans passer par Dict. Ici, c'est possible si on n'avait pas l'adaptateur correspondant.
-    # Pour le test, imaginons qu'on supprime l'adaptateur Dict->DF, ce test prouverait l'échec.
-    # Dans ce cas, on va juste tenter une conversion farfelue, par ex: CSV -> PythonDictData (non défini).
+    # Au lieu de CSV -> PythonDictData, on va tenter CSV -> ERRORData
+    # Ce type n'a aucun adaptateur, donc aucun chemin n'est possible.
+    from chimere.types import ERRORData
     csv_obj = CSVData("col1,col2\nval1,val2")
     with pytest.raises(ValueError, match="Aucun chemin de conversion trouvé"):
-        convert(csv_obj, PythonDictData)
+        convert(csv_obj, ERRORData)
+
+
+# ---- Tests ajoutés pour Phase 3 ----
+
+def test_xml_to_json_via_dict():
+    # Chemin: XMLData -> PythonDictData -> JSONData
+    xml_content = "<root>Hello</root>"
+    xml_obj = XMLData(xml_content)
+    json_obj = convert(xml_obj, JSONData)
+    assert isinstance(json_obj, JSONData)
+    # On vérifie le contenu JSON, qui devrait provenir du dict {root: "Hello"}
+    import json
+    data = json.loads(json_obj.content)
+    assert data == {"root": "Hello"}
+
+def test_invalid_xml():
+    # On fournit un XML invalide pour vérifier que la validation échoue
+    xml_content = "<root><unclosedTag>"
+    xml_obj = XMLData(xml_content)
+    with pytest.raises(ValueError, match="XML invalide"):
+        convert(xml_obj, JSONData)  # Doit échouer avant conversion
+
+def test_dataframe_to_parquet():
+    # On teste la conversion PandasDataFrameData -> ParquetData
+    df = pd.DataFrame({"name": ["Charlie"], "age": [40]})
+    df_obj = PandasDataFrameData(df)
+    pq_obj = convert(df_obj, ParquetData)
+    assert isinstance(pq_obj, ParquetData)
+    # On pourrait vérifier le contenu du parquet en le relisant :
+    df_back = pd.read_parquet(pq_obj.path)
+    assert df_back.equals(df)
+
+def test_invalid_json_validation():
+    # On fournit un JSON invalide à l'adaptateur JSON -> Dict
+    invalid_json = JSONData("{invalid_json}")
+    with pytest.raises(ValueError, match="JSON invalide"):
+        convert(invalid_json, PythonDictData)

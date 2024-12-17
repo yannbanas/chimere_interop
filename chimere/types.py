@@ -5,6 +5,10 @@ class BaseRepresentation(ABC):
     """Classe de base abstraite pour toutes les représentations de données."""
     pass
 
+class ERRORData(BaseRepresentation):
+    def __init__(self, content: str):
+        self.content = content
+
 class JSONData(BaseRepresentation):
     def __init__(self, content: str):
         """
@@ -37,3 +41,6 @@ class XMLData(BaseRepresentation):
     def __init__(self, content: str):
         self.content = content
 
+class ParquetData(BaseRepresentation):
+    def __init__(self, path: str):
+        self.path = path
